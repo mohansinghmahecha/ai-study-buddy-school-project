@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AI Study Buddy — Demo</title>
+  <style>
+    /* --- Simple modern styling (no external CSS required) --- */
+    :root{
+      --bg:#0f172a; --card:#0f172a; --muted:#94a3b8;
+      --accent:#38bdf8; --panel:#0f172a; --surface:#111827;
+      --glass: rgba(255,255,255,0.03);
+      --success:#34d399;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg,#071126 0%, #0b1220 100%); color:#e6eef8;
+      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+    }
+    header{padding:20px 18px; text-align:center; background:linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-bottom:1px solid rgba(255,255,255,0.03)}
+    header h1{margin:0; color:var(--accent); font-size:22px; letter-spacing:0.4px;}
+    header p{margin:6px 0 0; color:var(--muted); font-size:13px;}
+
+    .wrap{max-width:1000px; margin:30px auto; padding:18px; display:grid; gap:18px;
+          grid-template-columns: 1fr 420px;}
+
+    /* left column cards */
+    .card{background:var(--glass); padding:14px; border-radius:12px; box-shadow: 0 6px 18px rgba(2,6,23,0.6); border:1px solid rgba(255,255,255,0.03);}
+    .row{display:flex; gap:12px; align-items:center;}
+    h2{margin:0 0 8px 0; font-size:16px}
+    p.lead{margin:0;color:var(--muted); font-size:13px}
+
+    /* Chat area */
+    #chat-area{display:flex; flex-direction:column; gap:10px; height:360px;}
+    #chat-output{flex:1; overflow:auto; padding:12px; background:linear-gradient(180deg,#061026,#08142a); border-radius:8px; border:1px solid rgba(255,255,255,0.02)}
+    .msg{margin:8px 0; padding:8px 10px; border-radius:10px; max-width:78%;}
+    .msg.user{background:linear-gradient(90deg,#062032, #06314b); margin-left:auto; text-align:right;}
+    .msg.bot{background:linear-gradient(90deg,#0b1b2b,#082034);}
+
+    .controls{display:flex; gap:8px;}
+    input[type="text"], input[type="number"], select, textarea{
+      background:transparent; border:1px solid rgba(255,255,255,0.04); color:inherit; padding:8px 10px; border-radius:8px; outline:none;
+    }
+    input::placeholder{color:var(--muted)}
+    button.primary{background:var(--accent); color:#04243a; border:none; padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:600}
+    button.ghost{background:transparent; border:1px solid rgba(255,255,255,0.05); color:var(--muted); padding:8px 10px; border-radius:8px; cursor:pointer}
+
+    /* Right column: timetable, progress, flashcards */
+    .side{display:flex; flex-direction:column; gap:12px;}
+    .small{font-size:13px; color:var(--muted)}
+    table{width:100%; border-collapse:collapse;}
+    td, th{padding:8px; text-align:left; font-size:13px; border-bottom:1px dashed rgba(255,255,255,0.02)}
+    .chip{display:inline-block; padding:4px 8px; border-radius:999px; background:rgba(56,189,248,0.12); color:var(--accent); font-weight:600; font-size:12px;}
+
+    /* flashcards */
+    .flash-row{display:flex; gap:8px; flex-wrap:wrap}
+    .card-flash{width:calc(50% - 6px); min-height:80px; background:linear-gradient(180deg,#071a2b,#081827); border-radius:8px; padding:10px; cursor:pointer; border:1px solid rgba(255,255,255,0.02)}
+    .card-flash .front{font-weight:600}
+    .card-flash .back{display:none; color:var(--muted); margin-top:8px; font-size:13px}
+
+    /* canvas progress */
+    #progressCanvas{width:100%; height:120px; background:linear-gradient(180deg,#071024,#071026); border-radius:8px; padding:8px}
+
+    footer{margin:28px auto; text-align:center; color:var(--muted); font-size:13px}
+    @media(max-width:980px){
+      .wrap{grid-template-columns:1fr; padding:12px}
+      .card-flash{width:100%}
+    }
+
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>AI Study Buddy — Demo (No-code friendly)</h1>
+  <p>Local demo: Chat, Timetable, Progress & Flashcards — runs in the browser</p>
+</header>
+
+<main class="wrap">
+  <!-- LEFT COLUMN -->
+  <div style="display:flex; flex-direction:column; gap:12px;">
+    <!-- About -->
+    <section class="card">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <h2>Project Overview</h2>
+          <p class="lead">A lightweight student demo that simulates AI-driven study help. The student can show interactivity and logic without building a server.</p>
+        </div>
+        <div style="text-align:right">
+          <span class="chip">Demo-ready</span>
+        </div>
+      </div>
+
+      <div style="margin-top:12px" class="small">
+        <strong>How we simulate AI:</strong> canned answers + simple pattern matching for common questions (math help, study tips). Timetable uses a deterministic formula to distribute hours across days.
+      </div>
+    </section>
+
+    <!-- Chat -->
+    <section class="card" aria-labelledby="chat-title">
+      <h2 id="chat-title">Chat with Study Buddy 💬</h2>
+      <div id="chat-area">
+        <div id="chat-output" aria-live="polite" role="log"></div>
+
+        <div style="display:flex; gap:8px; margin-top:6px; align-items:center;">
+          <input id="user-input" type="text" placeholder="Type a question like: How to solve quadratic equation?" aria-label="Your question" />
+          <button class="primary" id="sendBtn">Send</button>
+          <button class="ghost" id="examplesBtn" title="Show example prompts">Examples</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Timetable controls -->
+    <section class="card" aria-labelledby="timetable-title">
+      <h2 id="timetable-title">Smart Timetable Generator</h2>
+      <p class="small">Enter up to 5 subjects. The generator will distribute your weekly study hours across 7 days.</p>
+
+      <div style="display:grid; gap:8px; margin-top:8px">
+        <div style="display:flex; gap:8px;">
+          <input id="subject1" type="text" placeholder="Subject (e.g., Math)" />
+          <input id="hours1" type="number" min="0" placeholder="hrs/week" style="width:110px" />
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input id="subject2" type="text" placeholder="Subject (e.g., Physics)" />
+          <input id="hours2" type="number" min="0" placeholder="hrs/week" style="width:110px" />
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input id="subject3" type="text" placeholder="Subject" />
+          <input id="hours3" type="number" min="0" placeholder="hrs/week" style="width:110px" />
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input id="subject4" type="text" placeholder="Subject" />
+          <input id="hours4" type="number" min="0" placeholder="hrs/week" style="width:110px" />
+        </div>
+        <div style="display:flex; gap:8px;">
+          <input id="subject5" type="text" placeholder="Subject" />
+          <input id="hours5" type="number" min="0" placeholder="hrs/week" style="width:110px" />
+        </div>
+
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button class="ghost" id="clearBtn">Clear</button>
+          <button class="primary" id="genBtn">Generate Timetable</button>
+        </div>
+      </div>
+
+      <div id="timetableResult" style="margin-top:12px; display:none">
+        <h3 style="margin:0 0 8px 0; font-size:14px">Timetable (Weekly view)</h3>
+        <table id="timetableTable" role="table" aria-label="Generated timetable"></table>
+      </div>
+    </section>
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <aside class="side">
+    <!-- Progress tracker -->
+    <section class="card" aria-labelledby="progress-title">
+      <h2 id="progress-title">Progress Tracker</h2>
+      <p class="small">Enter last 5 test scores for a subject to visualize improvement.</p>
+
+      <div style="display:flex; gap:8px; margin-top:8px; align-items:center;">
+        <select id="subjectSelect"><option value="Math">Math</option><option value="Physics">Physics</option><option value="Chemistry">Chemistry</option></select>
+        <input id="score1" type="number" min="0" max="100" placeholder="score1" style="width:72px"/>
+        <input id="score2" type="number" min="0" max="100" placeholder="score2" style="width:72px"/>
+        <input id="score3" type="number" min="0" max="100" placeholder="score3" style="width:72px"/>
+        <input id="score4" type="number" min="0" max="100" placeholder="score4" style="width:72px"/>
+        <input id="score5" type="number" min="0" max="100" placeholder="score5" style="width:72px"/>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px; justify-content:flex-end;">
+        <button class="ghost" id="clearScores">Clear</button>
+        <button class="primary" id="drawBtn">Show Progress</button>
+      </div>
+
+      <div style="margin-top:10px;">
+        <canvas id="progressCanvas" width="400" height="120" aria-label="Progress chart"></canvas>
+      </div>
+      <div id="progressNote" class="small" style="margin-top:8px"></div>
+    </section>
+
+    <!-- Flashcards -->
+    <section class="card">
+      <h2>Smart Flashcards</h2>
+      <p class="small">Enter Q & A pairs (one per line like <code>Q - A</code>) and click Generate.</p>
+      <textarea id="flashInput" rows="5" placeholder="Example: What is H2O? - Water"></textarea>
+      <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:8px;">
+        <button class="ghost" id="clearFlash">Clear</button>
+        <button class="primary" id="genFlash">Generate</button>
+      </div>
+
+      <div id="flashcards" style="margin-top:12px"></div>
+    </section>
+
+    <!-- Tips -->
+    <section class="card">
+      <h2>Presentation Tips</h2>
+      <ul style="margin:8px 0 0 18px; color:var(--muted); font-size:13px">
+        <li>Show the timetable generator with real inputs (e.g., Math:5, Physics:3).</li>
+        <li>Use Chat: ask 2 live questions and read the answers aloud.</li>
+        <li>Point teacher to files: index.html (single file) — runs offline.</li>
+      </ul>
+    </section>
+  </aside>
+</main>
+
+<footer>© 2025 AI Study Buddy — Student demo. No server required.</footer>
+
+<script>
+  // -------------------------
+  // Simple "AI" chat (canned replies + tiny pattern matching)
+  // -------------------------
+  const chatOutput = document.getElementById('chat-output');
+  const userInput = document.getElementById('user-input');
+  const sendBtn = document.getElementById('sendBtn');
+  const examplesBtn = document.getElementById('examplesBtn');
+
+  const canned = [
+    {patterns: [/quadratic/i, /solve.*quadratic/i], reply: "To solve ax²+bx+c=0 use formula x = (-b ± √(b²−4ac)) / (2a). Try substituting numbers and check solutions."},
+    {patterns: [/factor/i, /factorize/i], reply: "Look for common factors, then use (ax + b)(cx + d). For quadratics try splitting the middle term."},
+    {patterns: [/study.*plan/i, /timetable/i, /schedule/i], reply: "Use short focused sessions (25–45 min), 5–10 min breaks, and mix subjects. Prioritize weak topics closer to exams."},
+    {patterns: [/formula/i, /remember/i, /forget/i], reply: "Make simple one-page formula sheets and revise them daily for 5–10 minutes."},
+    {patterns: [/how many hours/i, /hours.*study/i], reply: "Start with 1–2 hours per subject per day when preparing for tests, gradually increase if needed."},
+    {patterns: [/derivative/i, /integral/i], reply: "Derivatives measure instantaneous change; integrals add up small parts. Practice basic rules and chain/product/quotient rules."},
+    {patterns: [/hello|hi|hey/i], reply: "Hi! Ask me anything about studying, timetables, or simple questions from school subjects."},
+    {patterns: [/thanks|thank you/i], reply: "You're welcome — good luck studying!"},
+  ];
+
+  function appendMsg(text, who='bot'){
+    const el = document.createElement('div');
+    el.className = 'msg ' + (who === 'user' ? 'user' : 'bot');
+    el.textContent = (who === 'user' ? 'You: ' : 'AI Buddy: ') + text;
+    chatOutput.appendChild(el);
+    chatOutput.scrollTop = chatOutput.scrollHeight;
+  }
+
+  function findCannedAnswer(txt){
+    for(const item of canned){
+      for(const p of item.patterns){
+        if(p.test(txt)) return item.reply;
+      }
+    }
+    return null;
+  }
+
+  function sendMessage(){
+    const q = userInput.value.trim();
+    if(!q) return;
+    appendMsg(q, 'user');
+    userInput.value = '';
+    // show typing...
+    appendMsg("Thinking...", 'bot');
+    // simulate delay then replace "Thinking..." with actual reply
+    setTimeout(() => {
+      // remove the last "Thinking..." message
+      const msgs = [...chatOutput.querySelectorAll('.msg.bot')];
+      const last = msgs[msgs.length-1];
+      if(last && last.textContent.includes('Thinking')) last.remove();
+
+      const ans = findCannedAnswer(q) || fallbackAnswer(q);
+      appendMsg(ans, 'bot');
+    }, 700);
+  }
+
+  function fallbackAnswer(q){
+    // basic keyword extraction
+    if(/\bdefine\b/i.test(q)) return "Try asking: 'Define <term>' e.g., 'Define photosynthesis'. I will give a short answer and tips to remember it.";
+    if(/\bexample\b/i.test(q)) return "I can give an example. Tell me the topic (e.g., 'example of chemical reaction').";
+    // default helpful reply that points to features
+    return "I don't know exactly, but here's a tip: break the problem into smaller parts and practice one part for 15–25 minutes. You can also ask me for a study plan or to create flashcards.";
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  userInput.addEventListener('keydown', e => { if(e.key === 'Enter') sendMessage(); });
+
+  examplesBtn.addEventListener('click', () => {
+    const examples = [
+      "How to solve quadratic equations?",
+      "Create a study plan for 5 days",
+      "How many hours to study math daily?",
+      "Define photosynthesis",
+    ];
+    appendMsg("Examples: " + examples.join(" — "), 'bot');
+  });
+
+
+  // -------------------------
+  // Timetable generator (simple distribution)
+  // -------------------------
+  const genBtn = document.getElementById('genBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const timetableResult = document.getElementById('timetableResult');
+  const timetableTable = document.getElementById('timetableTable');
+
+  function collectSubjects(){
+    const arr = [];
+    for(let i=1;i<=5;i++){
+      const s = document.getElementById('subject'+i).value.trim();
+      const h = Number(document.getElementById('hours'+i).value || 0);
+      if(s && h>0) arr.push({subject:s, hours:h});
+    }
+    return arr;
+  }
+
+  function generateTimetable(){
+    const subs = collectSubjects();
+    if(subs.length === 0){
+      alert('Add at least one subject with hours/week.');
+      return;
+    }
+    // create a 7-day grid with subject blocks
+    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    // Total hours per week
+    const total = subs.reduce((a,b)=>a+b.hours, 0);
+    // We'll convert to integer "study blocks" (30-min blocks -> multiply by 2)
+    // Simpler: distribute hours proportionally across days with small rounding
+    const dayAlloc = days.map(()=>[]);
+    // Strategy: for each subject, place its hours across days one hour at a time (round-robin),
+    subs.forEach(sub => {
+      let remaining = Math.round(sub.hours); // integer hours
+      let d=0;
+      while(remaining>0){
+        dayAlloc[d % 7].push(sub.subject);
+        remaining--;
+        d++;
+      }
+    });
+
+    // Build table: columns: Day | Subjects (count)
+    timetableTable.innerHTML = '';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Day</th><th>Study Blocks (subjects)</th></tr>';
+    timetableTable.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    days.forEach((day,i) => {
+      const tr = document.createElement('tr');
+      const tdDay = document.createElement('td');
+      tdDay.textContent = day;
+      const tdSub = document.createElement('td');
+      if(dayAlloc[i].length === 0) tdSub.innerHTML = '<span class="small">Rest / light revision</span>';
+      else {
+        // count occurrences to show "Math ×2"
+        const counts = {};
+        dayAlloc[i].forEach(s => counts[s] = (counts[s]||0)+1);
+        // join with badges
+        tdSub.innerHTML = Object.entries(counts).map(([s,c])=>`${s} × ${c}hr`).join(' • ');
+      }
+      tr.appendChild(tdDay); tr.appendChild(tdSub);
+      tbody.appendChild(tr);
+    });
+    timetableTable.appendChild(tbody);
+    timetableResult.style.display = 'block';
+  }
+
+  genBtn.addEventListener('click', generateTimetable);
+  clearBtn.addEventListener('click', () => {
+    for(let i=1;i<=5;i++){ document.getElementById('subject'+i).value=''; document.getElementById('hours'+i).value=''; }
+    timetableResult.style.display='none';
+  });
+
+  // -------------------------
+  // Progress tracker (small bar chart on canvas)
+  // -------------------------
+  const drawBtn = document.getElementById('drawBtn');
+  const clearScores = document.getElementById('clearScores');
+  const canvas = document.getElementById('progressCanvas');
+  const ctx = canvas.getContext('2d');
+  function drawProgress(){
+    // read scores
+    const scores = [
+      Number(document.getElementById('score1').value || 0),
+      Number(document.getElementById('score2').value || 0),
+      Number(document.getElementById('score3').value || 0),
+      Number(document.getElementById('score4').value || 0),
+      Number(document.getElementById('score5').value || 0),
+    ].map(s => Math.max(0, Math.min(100, s)));
+    const valid = scores.some(s => s>0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    // draw axes & bars
+    if(!valid){
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#9fb8ce';
+      ctx.font = '12px Arial'; ctx.fillText('Enter scores and click "Show Progress"', 12, 24);
+      document.getElementById('progressNote').textContent = '';
+      return;
+    }
+    const w = canvas.width, h=canvas.height;
+    const padding = 30;
+    // draw grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 1;
+    for(let i=0;i<=5;i++){
+      const y = padding + (h - padding*2) * i/5;
+      ctx.beginPath(); ctx.moveTo(padding, y); ctx.lineTo(w-padding, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(200,220,240,0.06)'; ctx.font='11px Arial';
+      const label = (100 - (i*20)).toString();
+      ctx.fillText(label, 6, y+4);
+    }
+    // bars
+    const barW = (w - padding*2) / scores.length * 0.6;
+    scores.forEach((s, idx) => {
+      const x = padding + idx * ((w - padding*2) / scores.length) + ((w - padding*2)/scores.length - barW)/2;
+      const barH = ((h - padding*2) * s / 100);
+      ctx.fillStyle = 'rgba(56,189,248,0.9)';
+      ctx.fillRect(x, h - padding - barH, barW, barH);
+      // label index
+      ctx.fillStyle = '#dff7ff'; ctx.font='11px Arial';
+      ctx.fillText(`T${idx+1}`, x+barW/2-10, h - padding + 14);
+      // score label
+      ctx.fillText(`${s}`, x+barW/2-10, h - padding - barH - 6);
+    });
+
+    // simple trend note
+    const avg = Math.round(scores.reduce((a,b)=>a+b,0)/scores.length);
+    document.getElementById('progressNote').textContent = `Average score: ${avg}%. (Higher is better; aim to improve by 5–10% over weeks.)`;
+  }
+
+  drawBtn.addEventListener('click', drawProgress);
+  clearScores.addEventListener('click', () => {
+    for(let i=1;i<=5;i++) document.getElementById('score'+i).value='';
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    document.getElementById('progressNote').textContent='';
+  });
+
+  // initialize canvas with message
+  canvas.width = canvas.clientWidth;
+  canvas.height = canvas.clientHeight;
+  ctx.font = '13px Arial'; ctx.fillStyle='#9fb8ce';
+  ctx.fillText('Progress chart will appear here', 12, 60);
+
+  // -------------------------
+  // Flashcards (client-only)
+  // -------------------------
+  const genFlash = document.getElementById('genFlash');
+  const clearFlash = document.getElementById('clearFlash');
+  const flashInput = document.getElementById('flashInput');
+  const flashcardsDiv = document.getElementById('flashcards');
+
+  function generateFlashcards(){
+    flashcardsDiv.innerHTML = '';
+    const raw = flashInput.value.trim();
+    if(!raw){ alert('Enter at least one Q - A line'); return; }
+    const lines = raw.split('\n').map(l=>l.trim()).filter(Boolean);
+    const pairs = lines.map(line => {
+      const parts = line.split(' - ');
+      if(parts.length >= 2) return {q: parts[0].trim(), a: parts.slice(1).join(' - ').trim()};
+      // fallback: split by '?'
+      const idx = line.indexOf('?');
+      if(idx>0) return {q: line.slice(0,idx+1).trim(), a: line.slice(idx+1).trim() || 'See notes'};
+      return {q: line, a: 'Answer not provided'};
+    });
+    pairs.forEach(p => {
+      const el = document.createElement('div'); el.className='card-flash';
+      el.innerHTML = `<div class="front">${escapeHtml(p.q)}</div><div class="back">${escapeHtml(p.a)}</div>`;
+      // flip on click
+      el.addEventListener('click', () => {
+        const back = el.querySelector('.back');
+        back.style.display = back.style.display === 'block' ? 'none' : 'block';
+      });
+      flashcardsDiv.appendChild(el);
+    });
+  }
+  function escapeHtml(s){ return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+
+  genFlash.addEventListener('click', generateFlashcards);
+  clearFlash.addEventListener('click', () => { flashInput.value = ''; flashcardsDiv.innerHTML = ''; });
+
+  // -------------------------
+  // Accessibility / quick demo hints
+  // -------------------------
+  // Prefill demo content for convenience (student can remove)
+  (function prefill(){
+    document.getElementById('subject1').value='Math'; document.getElementById('hours1').value='5';
+    document.getElementById('subject2').value='Physics'; document.getElementById('hours2').value='3';
+    document.getElementById('subject3').value='Chemistry'; document.getElementById('hours3').value='2';
+    userInput.placeholder = "Ask: How to solve quadratic equation?";
+    flashInput.value = "What is H2O? - Water\nDefine photosynthesis - Process by which plants make food using sunlight\nWhat is the quadratic formula? - x = (-b ± sqrt(b²-4ac))/(2a)";
+  })();
+
+</script>
+
+</body>
+</html>
